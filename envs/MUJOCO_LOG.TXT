@@ -1,0 +1,18 @@
+Sat Sep 21 18:24:05 2024
+WARNING: mju_openResource: unknown file 'C:\Users\1703a\PycharmProjects\Humaoid Fall Recovery\envs\robot.xml'
+
+Mon Oct 14 16:33:26 2024
+WARNING: Nan, Inf or huge value in QACC at DOF 0. The simulation is unstable. Time = 0.8900.
+
+Mon Oct 14 16:33:27 2024
+WARNING: Nan, Inf or huge value in QVEL at DOF 0. The simulation is unstable. Time = 0.0020.
+
+Mon Oct 14 16:33:27 2024
+WARNING: Nan, Inf or huge value in QACC at DOF 6. The simulation is unstable. Time = 0.0010.
+
+Mon Oct 14 16:33:31 2024
+WARNING: Nan, Inf or huge value in QVEL at DOF 3. The simulation is unstable. Time = 0.1410.
+
+Mon Oct 14 16:33:32 2024
+WARNING: Nan, Inf or huge value in CTRL at ACTUATOR 1. The simulation is unstable. Time = 0.0010.
+

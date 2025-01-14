@@ -1,0 +1,154 @@
+____________________ Position and velocity indexing _________________________________
+
+Floating Base Joint (Waist):
+    qpos Index: 0 to 6 (7 entries for the free joint: 3 for position, 4 for orientation)
+    qvel Index: 0 to 5 (6 entries for the free joint: 3 for linear velocity, 3 for angular velocity)
+
+Left_Hip_Yaw:
+    qpos Index: 7
+    qvel Index: 6
+
+Left_Hip_Roll:
+    qpos Index: 8
+    qvel Index: 7
+
+Left_Hip_Pitch:
+    qpos Index: 9
+    qvel Index: 8
+
+Left_Knee_Pitch:
+    qpos Index: 10
+    qvel Index: 9
+
+Left_Ankle_Pitch:
+    qpos Index: 11
+    qvel Index: 10
+
+Left_Ankle_Roll:
+    qpos Index: 12
+    qvel Index: 11
+
+Right_Hip_Yaw:
+    qpos Index: 13
+    qvel Index: 12
+
+Right_Hip_Roll:
+    qpos Index: 14
+    qvel Index: 13
+
+Right_Hip_Pitch:
+    qpos Index: 15
+    qvel Index: 14
+
+Right_Knee_Pitch:
+    qpos Index: 16
+    qvel Index: 15
+
+Right_Ankle_Pitch:
+    qpos Index: 17
+    qvel Index: 16
+
+Right_Ankle_Roll:
+    qpos Index: 18
+    qvel Index: 17
+
+Waist_Yaw:
+    qpos Index: 19
+    qvel Index: 18
+
+Neck_Yaw:
+    qpos Index: 20
+    qvel Index: 19
+
+Left_Shoulder_Pitch:
+    qpos Index: 21
+    qvel Index: 20
+
+Left_Shoulder_Roll:
+    qpos Index: 22
+    qvel Index: 21
+
+Left_Arm_Yaw:
+    qpos Index: 23
+    qvel Index: 22
+
+Left_Elbow_Pitch:
+    qpos Index: 24
+    qvel Index: 23
+
+Right_Shoulder_Pitch:
+    qpos Index: 25
+    qvel Index: 24
+
+Right_Shoulder_Roll:
+    qpos Index: 26
+    qvel Index: 25
+
+Right_Arm_Yaw:
+    qpos Index: 27
+    qvel Index: 26
+
+Right_Elbow_Pitch:
+    qpos Index: 28
+    qvel Index: 27
+
+Summary:
+    Total qpos entries: 29
+    Total qvel entries: 28
+
+
+________________________________________ Actuator or motor indexing for ctrl ______________________________________
+index 0: LHY (Left Hip Yaw)
+index 1: LHR (Left Hip Roll)
+index 2: LHP (Left Hip Pitch)
+index 3: LKP (Left Knee Pitch)
+index 4: LAP (Left Ankle Pitch)
+index 5: LAR (Left Ankle Roll)
+index 6: RHY (Right Hip Yaw)
+index 7: RHR (Right Hip Roll)
+index 8: RHP (Right Hip Pitch)
+index 9: RKP (Right Knee Pitch)
+index 10: RAP (Right Ankle Pitch)
+index 11: RAR (Right Ankle Roll)
+index 12: LSP (Left Shoulder Pitch)
+index 13: LSR (Left Shoulder Roll)
+index 14: LAY (Left Arm Yaw)
+index 15: LEP (Left Elbow Pitch)
+index 16: RSP (Right Shoulder Pitch)
+index 17: RSR (Right Shoulder Roll)
+index 18: RAY (Right Arm Yaw)
+index 19: REP (Right Elbow Pitch)
+index 20: WY (Waist Yaw)
+index 21: NY (Neck Yaw)
+
+
+
+
+
+____________________________ X-POS _________________________
+postions are with respect to the waist
+
+0. Waist (base position)
+1. LeftHipBracket
+2. LeftPelvis
+3. LeftThigh
+4. LeftShin
+5. LeftAnkle
+6. LeftFoot
+7. RightHipBracket
+8. RightPelvis
+9. RightThigh
+10. RightShin
+11. RightAnkle
+12. RightFoot
+13. Torso
+14. Head
+15. LeftShoulderBracket
+16. LeftUpperArm
+17. LeftElbowBracket
+18. LeftForeArm
+19. RightShoulderBracket
+20. RightUpperArm
+21. RightElbowBracket
+22. RightForeArm
+

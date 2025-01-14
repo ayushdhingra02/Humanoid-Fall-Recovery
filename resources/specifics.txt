@@ -1,0 +1,43 @@
+_______________INPUT TO SIMULATION_____________________
+####### (1)
+mjData.ctrl or data.ctrl---- to pass the torque value for motor as actuators to apply during th etime step
+
+as mj.step(model,data)
+
+######### (2)
+
+Also for smooth transition do the step in 8 (any number ) decimations for smooth and stable motion and check termination after each mini step
+this means the action are calculated at different frequency and the simulating the same step at different frequency
+
+######### (3)
+
+def step(self, actions):
+    clip_actions = self.cfg.normalization.clip_actions
+    self.actions = torch.clip(actions, -clip_actions, clip_actions).to(self.device)
+
+    -----------------store the following--------------
+    self.prev_base_pose=self.base_pos.clone()
+    self.prev_base_quat=self.base_quat.clone()
+    self.prev_base_lin_vel=self.base_len_vel.clone()
+    self.prev_foot_velocities=self.foot_velocities.clone()
+
+    ------------loop for step decimation-------------
+    for _ in range(self.cfg.control.decimation):
+        self.torques= self._compute_torques(self.actions).view(self.torques.shape)
+        data.ctrl=torch.unwrap_tensor(self.torques)
+        env.step(data)
+
+get_observation
+    pos= final_position - default_position
+    velocity = initial_velocity-final_velocity
+    action
+
+
+reset (self, seed=none, option=none)
+    return obs, info
+
+
+reset_idx(self,idx,seed=none, option=none)
+    return obs,info
+
+step(action)
