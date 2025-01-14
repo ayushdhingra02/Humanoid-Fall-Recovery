@@ -209,7 +209,7 @@ class HumanoidEnv(MujocoEnv):
 
         return angular_velocity_vector
 
-    def _get_rew(self, x_velocity: float, action):
+    def _get_reward(self, x_velocity: float, action):
         # # forward_reward = self._forward_reward_weight * x_velocity
         # healthy_reward = self.healthy_reward
         # rewards = healthy_reward
