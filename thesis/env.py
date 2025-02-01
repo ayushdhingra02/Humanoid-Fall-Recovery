@@ -2,7 +2,10 @@ from typing import Dict, Tuple, Union
 
 import numpy as np
 import math
-
+import mujoco
+print(mujoco.__version__)
+import typing
+import torch
 from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
@@ -38,7 +41,7 @@ class HumanoidEnv(MujocoEnv):
             xml_file="./kondo_scene_squat_stand.xml",
             frame_skip=5,
             default_camera_config=DEFAULT_CAMERA_CONFIG,
-            render_mode="human",
+            render_mode=None,
             **kwargs,
     ):
         observation_space = Box(
@@ -77,8 +80,25 @@ class HumanoidEnv(MujocoEnv):
         self._reset_noise_scale = 0
         self.qpos_storage = []
         self.qvel_storage = []
-        self.height_threshold=0.5
+        self.height_threshold=0.08
         self.tilt_threshold = 45
+        self.target_height = 0.28
+        self.terminated = False
+        self.steps=0
+
+        self.num_obs=obs_size
+        self.num_privileged_obs=obs_size
+        self.num_obs_history=obs_size
+        self.num_actions=22
+        self.episode_length_buf=torch.tensor([], dtype=torch.int64)
+        self.max_episode_length=1000
+        self.num_envs=1
+        self.num_train_envs=1
+        self.category_names=None
+        self.curricula=None
+        self.num_steps_per_env=1000
+
+
 
 
     metadata = {
@@ -110,6 +130,9 @@ class HumanoidEnv(MujocoEnv):
 
         return is_healthy
 
+    def get_obs(self):
+        # Replace with your logic for returning the observation
+        return self._get_obs()
     def _get_obs(self):
         # position = self.data.qpos.flatten()
         # velocity = self.data.qvel.flatten()
@@ -122,10 +145,12 @@ class HumanoidEnv(MujocoEnv):
         # )
         delta_t = self.dt
         current_qpos=self.data.qpos.flatten()
+        previous_qpos=self.qpos_storage[-1]
+        diff=current_qpos-previous_qpos
         calculated_qvel=np.zeros(28)
-        calculated_qvel[6:] = (current_qpos[7:] - self.qpos_storage[-1][7:]) / delta_t
+        calculated_qvel[6:] = diff[7:]/self.dt
 
-        linear_velocity = (current_qpos[:3] - self.qpos_storage[-1][:3]) / delta_t  # Shape (3,)
+        linear_velocity = (current_qpos[:3] - self.qpos_storage[-1][:3]) / (delta_t + 1e-6)  # Shape (3,)
 
         # Angular velocity (qvel[3:6])
         current_orientation = current_qpos[3:7]  # Quaternion (w, x, y, z)
@@ -137,8 +162,22 @@ class HumanoidEnv(MujocoEnv):
         # qvel = np.concatenate((linear_velocity, angular_velocity))
         calculated_qvel[:3] = linear_velocity
         calculated_qvel[3:6] = angular_velocity
+        # print("current_qpos:", current_qpos)
+        # print("previous_qpos:", previous_qpos)
+        # print("diff:", diff)
+        # print("calculated_qvel:", calculated_qvel)
+        # print("linear_velocity:", linear_velocity)
+        # print("angular_velocity:", angular_velocity)
 
-        custom_observation = np.concatenate((self.qpos_storage[-1], self.qvel_storage[-1], self.qpos_storage[-2], self.qvel_storage[-2]))
+        self.qvel_storage.append(calculated_qvel.copy())
+        self.qpos_storage.append(current_qpos.copy())
+
+        # print("qpos_storage:", self.qpos_storage)
+        # print("qvel_storage:", self.qvel_storage)
+
+        custom_observation = np.concatenate([self.qpos_storage[-1], calculated_qvel])
+        # print("custom_observation:", custom_observation)
+        # , self.qpos_storage[-2], self.qvel_storage[-2]
 
         return custom_observation
 
@@ -154,6 +193,10 @@ class HumanoidEnv(MujocoEnv):
         self.qvel_storage.append(qvel.copy())  # Store a copy of qvel
 
     def step(self, action):
+        # print (self.steps)
+        # if self.steps>100 or self.terminated==True:
+        #     self.reset_model()
+        self.steps += 1
         xy_position_before = mass_center(self.model, self.data)
         action = self._compute_torques(action)
         self.do_simulation(action, self.frame_skip)
@@ -164,7 +207,7 @@ class HumanoidEnv(MujocoEnv):
 
         observation = self._get_obs()
         reward, reward_info = self._get_rew(x_velocity, action)
-        terminated = (not self.is_healthy) and self._terminate_when_unhealthy
+        # terminated = (not self.is_healthy) and self._terminate_when_unhealthy
         info = {
             "x_position": self.data.qpos[0],
             "y_position": self.data.qpos[1],
@@ -173,13 +216,15 @@ class HumanoidEnv(MujocoEnv):
             "distance_from_origin": np.linalg.norm(self.data.qpos[0:2], ord=2),
             "x_velocity": x_velocity,
             "y_velocity": y_velocity,
-            **reward_info,
-        }
+            }
+
 
         if self.render_mode == "human":
             self.render()
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
-        return observation, reward, terminated, False, info
+        if self.steps>=100:
+            self.terminated=True
+        return observation, reward, self.terminated,False, info
 
     def _compute_torques(self,action):
         kp = 2.0  # Proportional gain
@@ -209,71 +254,91 @@ class HumanoidEnv(MujocoEnv):
 
         return angular_velocity_vector
 
-    def _get_reward(self, x_velocity: float, action):
-        # # forward_reward = self._forward_reward_weight * x_velocity
-        # healthy_reward = self.healthy_reward
-        # rewards = healthy_reward
-        #
-        # ctrl_cost = self.control_cost(action)
-        # # contact_cost = self.contact_cost
-        # costs = ctrl_cost
-        #
-        # reward = rewards - costs
-        #
-        # reward_info = {
-        #     "reward_survive": healthy_reward,
-        #     # "reward_forward": forward_reward,
-        #     "reward_ctrl": -ctrl_cost,
-        #     # "reward_contact": -contact_cost,
-        # }
+    def _get_rew(self, x_velocity: float, action):
 
-        torso_height = self.data.body_xpos[self.model.body_name2id("torso")][2]
-        r_stand = 10 * max(0, 1 - abs(torso_height - self.target_height))
+        torso_height = self.data.xpos[self.model.body("Torso").id][2]
+        r_stand = 50 * max(0, 0.28 - abs(torso_height - self.target_height))
 
         # Balance reward
         zmp_robot = self.calculate_zmp()  # Use your ZMP calculation function
-        squared_distance = sum((a - b) ** 2 for a, b in zip(zmp_robot, self.zmp_target))
+        squared_distance = sum((a - b) ** 2 for a, b in zip(zmp_robot, (0, 0)))
         r_balance = 5 * math.exp(-squared_distance)
 
         # Smooth motion reward
         qacc=np.zeros(28)
-        qacc[6:] = (self.qvel_storage[-1][6:] - self.qvel_storage[-2][6:]) / self.dt
+        qacc[6:] = (self.qvel_storage[-1][6:] - self.qvel_storage[-1][6:]) / self.dt
         joint_accelerations = qacc
-        r_smooth = -1 * np.sum(np.square(joint_accelerations))
+        r_smooth = -10 * np.sum(np.square(joint_accelerations))
 
         # Energy efficiency reward
         joint_torques = action
         r_energy = -1 * np.sum(np.square(joint_torques))
 
         # Posture reward
-        torso_orientation = self.data.body_xquat[self.model.body_name2id("torso")]
-        r_posture = 3 * np.exp(-np.linalg.norm(torso_orientation - self.target_orientation) ** 2)
+        torso_orientation = self.data.xquat[self.model.body("Torso").id]
+        r_posture = 3 * np.exp(-np.linalg.norm(torso_orientation - (1,0,0,0)) ** 2)
 
         # Time penalty
-        r_time = -0.1  # Constant penalty per step
+        r_time = -1 # Constant penalty per step
 
-        left_foot_contact = self.data.contact[self.model.body_name2id("left_foot")]
-        right_foot_contact = self.data.contact[self.model.body_name2id("right_foot")]
-        has_lost_contact = not (left_foot_contact or right_foot_contact)
-        if has_lost_contact:
-            r_contact=-50
+        left_foot_z = self.data.geom_xpos[self.data.body("LeftFoot").id][2]
+        right_foot_z = self.data.geom_xpos[self.data.body("RightFoot").id][2]
+        ground_z = 0.02755
+        contact_threshold = 0.001
+        # self.debug_contacts( left_foot_contact,right_foot_contact)
+        if abs(left_foot_z - ground_z) > contact_threshold or abs(right_foot_z - ground_z) > contact_threshold:
+            # If the foot is too far from the ground, terminate the episode
+            # self.terminated = True
+            r_contact = -50 # Apply a penalty for losing contact
         else:
-            r_contact = 0
-        # Fall penalty
+            # self.terminated = False
+            r_contact = 20
+            # Fall penalty
         if self.has_fallen():  # Implement this function to check for falls
-            r_fall = -100
+            r_fall = -5
         else:
-            r_fall = 0
+            r_fall = 2
 
+        qpos_target = np.array([
+            0.01, 0, 0.28, 1, 0, 0, 0,
+            -8.05913e-19, 0.0144613, -0.371244, 0.918294, -0.54705, -0.0144613,
+            1.28944e-18, -0.0144613, -0.379635, 0.93573, -0.556095, 0.0144613,
+            0, 0, -0.63612, -0.04712, -0.37696, -1.67276, -0.7068, -0.04712, 0.98952, -1.46072
+        ])  # Your final position from XML
+        qpos = self.data.qpos
+        r_final = 50 * np.exp(-20 * np.linalg.norm(qpos - qpos_target) ** 2)
+        if np.linalg.norm(qpos - qpos_target) < 0.05:  # If very close to final position
+            r_final += 500  # Large bonus
         # Total reward
-        total_reward = r_stand + r_balance + r_smooth + r_energy + r_posture + r_time + r_fall
+        total_reward = (r_stand + r_balance + r_smooth + r_energy + r_posture + r_time + r_fall+r_contact+self.steps*10+
+                        r_final)/100
         return total_reward, []
 
+    def debug_contacts(self,left_foot_contact,right_foot_contact):
+        print("Left foot contact: ", self.model.body("LeftFoot").id)
+        print("Right foot contact: ", self.model.body("RightFoot").id)
+        for i in range(self.data.ncon):
+            contact = self.data.contact[i]
+            print(f"Contact {i}: Geom1 = {contact.geom1}, Geom2 = {contact.geom2}")
+
+    def is_body_in_contact(self,body_id):
+        for contact in self.data.contact[:self.data.ncon]:
+            # Get the geom IDs involved in the contact
+            geom1 = contact.geom1
+            geom2 = contact.geom2
+
+            # Check if either geom corresponds to the body
+            if self.model.geom_bodyid[geom1]== body_id or self.model.geom_bodyid[geom2] == body_id:
+                return True  # Body is in contact
+
+        return False  # No contact found for this body
+
+
     def has_fallen(self):
-        torso_height = self.data.body_xpos[self.model.body_name2id("torso")][2]
+        torso_height = self.data.xpos[self.model.body("Torso").id][2]
 
         # Get torso orientation (quaternion)
-        torso_orientation = self.data.body_xquat[self.model.body_name2id("torso")]
+        torso_orientation = self.data.xquat[self.model.body("Torso").id]
 
         # Calculate tilt angle from upright position
         # Assuming the upright orientation quaternion is approximately [1, 0, 0, 0]
@@ -283,7 +348,8 @@ class HumanoidEnv(MujocoEnv):
         # Check conditions
         has_fallen_due_to_height = torso_height < self.height_threshold
         has_fallen_due_to_tilt = tilt_angle > self.tilt_threshold
-
+        if has_fallen_due_to_height or has_fallen_due_to_tilt:
+            self.terminated=True
         return has_fallen_due_to_height or has_fallen_due_to_tilt
 
     def calculate_zmp(self):
@@ -307,7 +373,8 @@ class HumanoidEnv(MujocoEnv):
     def reset_model(self):
         noise_low = -self._reset_noise_scale
         noise_high = self._reset_noise_scale
-
+        self.steps=0
+        # super().reset()
         qpos = self.init_qpos + self.np_random.uniform(
             low=noise_low, high=noise_high, size=self.model.nq
         )
@@ -325,9 +392,15 @@ class HumanoidEnv(MujocoEnv):
             low=noise_low, high=noise_high, size=self.model.nv
         )
         self.set_state(qpos_squat, qvel)
-
-        observation = self._get_obs()
+        # self.data.reset()
+        # self.model.step()  # Update physics calculations
+        # self.do_simulation(np.zeros(22),5)
         self._reset_episode_storage()
+        observation = np.concatenate([qpos_squat, qvel])
+        # left_foot_initial_z = self.data.body("LeftFoot").xpos[2]  # xpos[2] represents the Z-coordinate
+        # right_foot_initial_z = self.data.body("RightFoot").xpos[2]  # xpos[2] represents the Z-coordinate
+        # print(left_foot_initial_z, right_foot_initial_z)
+
         return observation
 
     def _get_reset_info(self):
@@ -338,3 +411,24 @@ class HumanoidEnv(MujocoEnv):
             "tendon_velocity": self.data.ten_velocity,
             "distance_from_origin": np.linalg.norm(self.data.qpos[0:2], ord=2),
         }
+
+    def get_observations(self):
+        observations = np.concatenate((self.qpos_storage[-1],self.qvel_storage[-1])) # This calls get_obs() which returns the concatenated result
+        print("Returned Observations:", observations)  # Print returned value for debugging
+        return observations
+    def start_recording(self):
+        pass
+    def start_recording_eval(self):
+        pass
+    def pause_recording(self):
+        pass
+    def pause_recording_eval(self):
+        pass
+    def get_complete_frames(self):
+        pass
+
+    def get_complete_frames_eval(self):
+        pass
+    def reset(self, *, seed: typing.Optional[int] = None, options: typing.Optional[dict] = None):
+        super().reset()
+        # super().set_state()

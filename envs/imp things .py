@@ -79,8 +79,8 @@ def compute_reward(sim, target_height, zmp_target, target_orientation):
 
 
 
-left_foot_initial = sim.data.body_xpos[sim.model.body_name2id("left_foot")][:2]
-right_foot_initial = sim.data.body_xpos[sim.model.body_name2id("right_foot")][:2]
+left_foot_initial = sim.data.body_xpos[sim.model.body_name2id("LeftFoot")][:2]
+right_foot_initial = sim.data.body_xpos[sim.model.body_name2id("RightFoot")][:2]
 initial_foot_position = (left_foot_initial + right_foot_initial) / 2
 
 # Assuming "left_foot" and "right_foot" are the names of the feet in the model

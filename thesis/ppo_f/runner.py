@@ -6,29 +6,36 @@ import time
 import torch
 from collections import deque
 from torch.utils.tensorboard import SummaryWriter as TensorboardSummaryWriter
-
-from thesis.ppo_f import PPO
-from actor_critic import ActorCritic
-from vec_env import VecEnv
+import sys
+sys.path.append("/thesis/ppo_f")
+# from ppo_f import PPO
+from .actor_critic import ActorCritic
+# from ..env import HumanoidEnv
+# from gymnasium.wrappers import TimeLimit, OrderEnforcing, PassiveEnvChecker
+# env = HumanoidEnv()
+# env = TimeLimit(env, max_episode_steps=1000)
+# env = OrderEnforcing(env)
+# obs = env.reset()
 
 
 class Runner:
     """On-policy runner for training and evaluation."""
 
-    def __init__(self, env: VecEnv, train_cfg, log_dir=None, device="cpu"):
+    def __init__(self, env, train_cfg, log_dir=None, device="cpu"):
+        from .ppo import PPO
         self.logger_type = "tensorboard"
         self.cfg = train_cfg
-        self.alg_cfg = train_cfg["algorithm"]
-        self.policy_cfg = train_cfg["policy"]
+        self.alg_cfg = "actor_critic"
+        self.policy_cfg = ""
         self.device = device
         self.env = env
         self.empirical_normalization= False
-        obs, extras = self.env.get_observations()
-        num_obs = obs.shape[1]
-        if "critic" in extras["observations"]:
-            num_critic_obs = extras["observations"]["critic"].shape[1]
-        else:
-            num_critic_obs = num_obs
+        obs, extras = self.env.get_obs()
+        num_obs = obs.shape[0]
+        # if "critic" in extras["observations"]:
+        #     num_critic_obs = extras["observations"]["critic"].shape[1]
+        # else:
+        num_critic_obs = num_obs
         actor_critic_class = eval(self.policy_cfg.pop("class_name"))  # ActorCritic
         actor_critic: ActorCritic  = actor_critic_class(
             num_obs, num_critic_obs, self.env.num_actions, **self.policy_cfg
