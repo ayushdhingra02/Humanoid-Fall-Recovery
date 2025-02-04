@@ -25,8 +25,8 @@ caches = DataCaches(1)
 class Runner_Args(PrefixProto, cli=False):
     # runner
     algorithm_class_name = 'RMA'
-    num_steps_per_env = 50  # per iteration
-    max_iterations = 1500  # number of policy updates
+    num_steps_per_env = 200  # per iteration
+    max_iterations = 15000000  # number of policy updates
 
     # logging
     save_interval = 5  # check for potential saves every this many iterations
@@ -108,47 +108,65 @@ class Runner:
         tot_iter = self.current_learning_iteration + num_learning_iterations
         for it in range(self.current_learning_iteration, tot_iter):
             start = time.time()
-
+            steps=0
             episode_reward = 0  # Initialize the reward for this episode
             with torch.inference_mode():
                 for i in range(self.num_steps_per_env):
+                    steps=i+1
+                    flag=0
                     actions_train = self.alg.act(obs[:num_train_envs], privileged_obs[:num_train_envs],
                                                  obs_history[:num_train_envs])
                     actions_train = actions_train.detach().numpy()
                     ret = self.env.step(actions_train[0])
-                    obs_dict, rewards, dones, truncation, infos = ret
+                    obs_dict, rewards, done, truncation, infos = ret
 
                     obs = torch.tensor(obs_dict, dtype=torch.float32).to(self.device).unsqueeze(0)
                     privileged_obs = obs
                     obs_history = obs
+                    if done or truncation:
+                        rewards-=10
+                        flag=1
+                        # break
                     rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device)
-                    dones = torch.tensor(dones, dtype=torch.bool).to(self.device)
+                    dones = torch.tensor(done, dtype=torch.bool).to(self.device)
 
                     if rewards.dim() == 0:
                         rewards = rewards.unsqueeze(0)
                     if dones.dim() == 0:
                         dones = dones.unsqueeze(0)
 
+
                     self.alg.process_env_step(rewards[:num_train_envs], dones[:num_train_envs], infos)
 
                     # Add the reward to the episode total
                     episode_reward += rewards.mean().item()
+
+
 
                     # Log per step if necessary
                     if 'curriculum' in infos:
                         self.writer.add_scalar('Rewards', rewards.mean().item(), it)
                         self.writer.add_scalar('Episode Length', lenbuffer.mean() if len(lenbuffer) > 0 else 0, it)
 
+                    if flag==1:
+                        break
+
             stop = time.time()
             self.alg.compute_returns(obs_history[:num_train_envs], privileged_obs[:num_train_envs])
             self.env.reset()
 
             # Log the average reward for this episode
-            mean_episode_reward = episode_reward / self.num_steps_per_env  # Average per episode
+            mean_episode_reward = episode_reward / steps  # Average per episode
             rewbuffer.append(mean_episode_reward)
             self.writer.add_scalar('Rewards/Mean Episode Reward', mean_episode_reward, global_step=it)
+            self.writer.add_scalar('Steps/Number of steps per episode', steps, global_step=it)
 
             mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student = self.alg.update()
+            self.writer.add_scalar('Loss/Value Loss', mean_value_loss, global_step=it)
+            self.writer.add_scalar('Loss/Surrogate Loss', mean_surrogate_loss, global_step=it)
+            self.writer.add_scalar('Loss/Adaptation Module Loss', mean_adaptation_module_loss, global_step=it)
+            self.writer.add_scalar('Timing/Iteration Time', stop - start, global_step=it)
+            self.writer.flush()
 
             # Save model and log losses
             if it % Runner_Args.save_interval == 0:
@@ -156,11 +174,7 @@ class Runner:
                 os.makedirs(checkpoint_dir, exist_ok=True)
                 torch.save(self.alg.actor_critic.state_dict(), f"{checkpoint_dir}/ac_weights_{it:06d}.pt")
                 torch.save(self.alg.actor_critic.state_dict(), f"{checkpoint_dir}/ac_weights_last.pt")
-                self.writer.add_scalar('Loss/Value Loss', mean_value_loss, global_step=it)
-                self.writer.add_scalar('Loss/Surrogate Loss', mean_surrogate_loss, global_step=it)
-                self.writer.add_scalar('Loss/Adaptation Module Loss', mean_adaptation_module_loss, global_step=it)
-                self.writer.add_scalar('Timing/Iteration Time', stop - start, global_step=it)
-                self.writer.flush()
+
 
         self.writer.close()
 

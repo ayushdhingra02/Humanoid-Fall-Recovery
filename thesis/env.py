@@ -222,7 +222,7 @@ class HumanoidEnv(MujocoEnv):
         if self.render_mode == "human":
             self.render()
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
-        if self.steps>=100:
+        if self.steps>=200:
             self.terminated=True
         return observation, reward, self.terminated,False, info
 
@@ -373,6 +373,7 @@ class HumanoidEnv(MujocoEnv):
     def reset_model(self):
         noise_low = -self._reset_noise_scale
         noise_high = self._reset_noise_scale
+        self.terminated=False
         self.steps=0
         # super().reset()
         qpos = self.init_qpos + self.np_random.uniform(

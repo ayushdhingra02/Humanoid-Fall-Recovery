@@ -24,7 +24,7 @@ def train():
                     f"AC_Args: {vars(AC_Args)}\nPPO_Args: {vars(PPO_Args)}\nRunnerArgs: {vars(Runner_Args)}")
 
     runner = Runner(env, writer=writer,device="cpu")
-    runner.learn(num_learning_iterations=100, init_at_random_ep_len=False, eval_freq=100 )
+    runner.learn(num_learning_iterations=10000000, init_at_random_ep_len=False, eval_freq=100 )
 
     writer.close()  # Close the writer at the end of training
 
