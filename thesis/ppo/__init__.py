@@ -26,7 +26,7 @@ class Runner_Args(PrefixProto, cli=False):
     # runner
     algorithm_class_name = 'RMA'
     num_steps_per_env = 50  # per iteration
-    max_iterations = 15  # number of policy updates
+    max_iterations = 1500  # number of policy updates
 
     # logging
     save_interval = 5  # check for potential saves every this many iterations
@@ -102,16 +102,18 @@ class Runner:
 
         self.alg.actor_critic.train()
 
-        rewbuffer = deque(maxlen=100)
+        rewbuffer = deque(maxlen=100)  # This will store the rewards for averaging
         lenbuffer = deque(maxlen=100)
 
         tot_iter = self.current_learning_iteration + num_learning_iterations
         for it in range(self.current_learning_iteration, tot_iter):
             start = time.time()
 
+            episode_reward = 0  # Initialize the reward for this episode
             with torch.inference_mode():
                 for i in range(self.num_steps_per_env):
-                    actions_train = self.alg.act(obs[:num_train_envs], privileged_obs[:num_train_envs], obs_history[:num_train_envs])
+                    actions_train = self.alg.act(obs[:num_train_envs], privileged_obs[:num_train_envs],
+                                                 obs_history[:num_train_envs])
                     actions_train = actions_train.detach().numpy()
                     ret = self.env.step(actions_train[0])
                     obs_dict, rewards, dones, truncation, infos = ret
@@ -129,6 +131,10 @@ class Runner:
 
                     self.alg.process_env_step(rewards[:num_train_envs], dones[:num_train_envs], infos)
 
+                    # Add the reward to the episode total
+                    episode_reward += rewards.mean().item()
+
+                    # Log per step if necessary
                     if 'curriculum' in infos:
                         self.writer.add_scalar('Rewards', rewards.mean().item(), it)
                         self.writer.add_scalar('Episode Length', lenbuffer.mean() if len(lenbuffer) > 0 else 0, it)
@@ -137,10 +143,14 @@ class Runner:
             self.alg.compute_returns(obs_history[:num_train_envs], privileged_obs[:num_train_envs])
             self.env.reset()
 
+            # Log the average reward for this episode
+            mean_episode_reward = episode_reward / self.num_steps_per_env  # Average per episode
+            rewbuffer.append(mean_episode_reward)
+            self.writer.add_scalar('Rewards/Mean Episode Reward', mean_episode_reward, global_step=it)
+
             mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student = self.alg.update()
 
-
-
+            # Save model and log losses
             if it % Runner_Args.save_interval == 0:
                 checkpoint_dir = './checkpoints1'
                 os.makedirs(checkpoint_dir, exist_ok=True)
