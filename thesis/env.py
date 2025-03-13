@@ -38,8 +38,8 @@ class HumanoidEnv(MujocoEnv):
 
     def __init__(
             self,
-            xml_file="./kondo_scene_squat_stand.xml",
-            frame_skip=5,
+            xml_file="./kondo_scene_sts.xml",
+            frame_skip=1,
             default_camera_config=DEFAULT_CAMERA_CONFIG,
             render_mode=None,
             **kwargs,
@@ -64,6 +64,7 @@ class HumanoidEnv(MujocoEnv):
         }
 
         obs_size = self.data.qpos.size + self.data.qvel.size
+        obs_size=obs_size
 
         self.observation_space = Box(
             low=-np.inf, high=np.inf, shape=(obs_size,), dtype=np.float64
@@ -97,6 +98,9 @@ class HumanoidEnv(MujocoEnv):
         self.category_names=None
         self.curricula=None
         self.num_steps_per_env=1000
+        self.decimations=8
+        self.default_pos=self.model.key_qpos[1].copy()
+        self._set_action_space()
 
 
 
@@ -112,9 +116,8 @@ class HumanoidEnv(MujocoEnv):
 
     def _set_action_space(self):
         bounds = self.model.actuator_ctrlrange.copy().astype(np.float32)
-        low, high = -2.75, 2.75
+        low, high = -2, 2
         self.action_space = Box(low=low, high=high, shape=(22,),dtype=np.float32)
-        return self.action_space
 
     @property
     def healthy_reward(self):
@@ -134,50 +137,42 @@ class HumanoidEnv(MujocoEnv):
         # Replace with your logic for returning the observation
         return self._get_obs()
     def _get_obs(self):
-        # position = self.data.qpos.flatten()
-        # velocity = self.data.qvel.flatten()
-        #
-        # return np.concatenate(
-        #     (
-        #         position,
-        #         velocity,
-        #     )
-        # )
-        delta_t = self.dt
+        #TODO: previlegde obs ko include krna h
+        #TODO: true com pos and vel
+        #TODO: gravity vector
+        #TODO: ground contact force
+        # TODO:friction coeff and coeeficient of restitution
+        ## Default friction: friction="1.0 0.005 0.0001"
+        ## Default elasticity: elasticity="0.0" (no bounce)
+        delta_t = self.dt* self.decimations
+
         current_qpos=self.data.qpos.flatten()
         previous_qpos=self.qpos_storage[-1]
         diff=current_qpos-previous_qpos
         calculated_qvel=np.zeros(28)
-        calculated_qvel[6:] = diff[7:]/self.dt
 
+        #velocities of joints
+        calculated_qvel[6:] = diff[7:]/delta_t
+
+        #base linear velocity
         linear_velocity = (current_qpos[:3] - self.qpos_storage[-1][:3]) / (delta_t + 1e-6)  # Shape (3,)
 
-        # Angular velocity (qvel[3:6])
         current_orientation = current_qpos[3:7]  # Quaternion (w, x, y, z)
         previous_orientation = self.qpos_storage[-1][3:7]  # Quaternion (w, x, y, z)
+
+        #base angular velocity
         angular_velocity = self.quaternion_to_angular_velocity(current_orientation, previous_orientation,
                                                                delta_t)  # Shape (3,)
 
         # Combine linear and angular velocities
-        # qvel = np.concatenate((linear_velocity, angular_velocity))
         calculated_qvel[:3] = linear_velocity
         calculated_qvel[3:6] = angular_velocity
-        # print("current_qpos:", current_qpos)
-        # print("previous_qpos:", previous_qpos)
-        # print("diff:", diff)
-        # print("calculated_qvel:", calculated_qvel)
-        # print("linear_velocity:", linear_velocity)
-        # print("angular_velocity:", angular_velocity)
 
         self.qvel_storage.append(calculated_qvel.copy())
         self.qpos_storage.append(current_qpos.copy())
 
-        # print("qpos_storage:", self.qpos_storage)
-        # print("qvel_storage:", self.qvel_storage)
 
-        custom_observation = np.concatenate([self.qpos_storage[-1], calculated_qvel])
-        # print("custom_observation:", custom_observation)
-        # , self.qpos_storage[-2], self.qvel_storage[-2]
+        custom_observation = np.concatenate([self.qpos_storage[-1], calculated_qvel, self.qpos_storage[-2], self.qvel_storage[-2]])
 
         return custom_observation
 
@@ -198,15 +193,17 @@ class HumanoidEnv(MujocoEnv):
         #     self.reset_model()
         self.steps += 1
         xy_position_before = mass_center(self.model, self.data)
-        action = self._compute_torques(action)
-        self.do_simulation(action, self.frame_skip)
+        action=action*2
+        for _ in range(self.decimations):
+            torque = self._compute_torques(action)
+            self.do_simulation(torque, self.frame_skip)
         xy_position_after = mass_center(self.model, self.data)
 
         xy_velocity = (xy_position_after - xy_position_before) / self.dt
         x_velocity, y_velocity = xy_velocity
 
         observation = self._get_obs()
-        reward, reward_info = self._get_rew(x_velocity, action)
+        reward, reward_info = self.get_reward_prev()
         # terminated = (not self.is_healthy) and self._terminate_when_unhealthy
         info = {
             "x_position": self.data.qpos[0],
@@ -232,8 +229,8 @@ class HumanoidEnv(MujocoEnv):
 
         last_qpos = self.qpos_storage[-1]  # Last step qpos
         last_qvel = self.qvel_storage[-1]  # Last step qvel
-
-        desired_pos=action
+        action_scaled=action/self.decimations
+        desired_pos=action_scaled + self.default_pos[7:29]
 
         position_error=desired_pos-last_qpos[7:29]
         torque = kp * position_error - kd * last_qvel[6:28]
@@ -255,7 +252,8 @@ class HumanoidEnv(MujocoEnv):
         return angular_velocity_vector
 
     def _get_rew(self, x_velocity: float, action):
-
+        #TODO: zmp inside polygon
+        #TODO: penalty for pos near the extrimities
         torso_height = self.data.xpos[self.model.body("Torso").id][2]
         r_stand = 50 * max(0, 0.28 - abs(torso_height - self.target_height))
 
@@ -314,6 +312,61 @@ class HumanoidEnv(MujocoEnv):
                         r_final)/100
         return total_reward, []
 
+    def reward_func(self, x, x_hat, c):
+        return -np.exp(c * ((x_hat - x) ** 2))
+
+    def get_reward_prev(self):
+        w_i = 1 / 17
+
+        # Terms for the reward function
+        phi_base = np.array([0, 0, -1])
+        h_base = np.array([0, 0, -1])
+        v_base = np.array([0, 0, 0])
+        tau = self.data.qfrc_actuator
+        tau_hat = np.zeros_like(tau)
+        q_i = self.data.qvel
+        q_dot_hat = np.zeros_like(q_i)
+        weights = [1 / 17, 4 / 17, 4 / 17, 1 / 17, 4 / 17, 1 / 17, 4 / 17, 1 / 17, 4 / 17, 4 / 17]
+        normalization = [-1.02, -12.5, -2, -0.031, -0.109, 1, -1.02, -5.556, -16.33, -16.33]
+        torso_pose = np.array([0, 0, -1])
+        head_height = np.array([0, 0, 0.36])  # Assuming head height should be around 1 when standing
+        body_ground_contact = 0 if any(contact.geom1 == 'ground' for contact in self.data.contact) else 1
+
+        # Compute the reward terms
+        # base_pose_reward = -w_i * np.linalg.norm(phi_base - self.data.qpos[0:3])
+        # base_height_reward = -w_i * np.linalg.norm(h_base - self.data.qpos[2])
+        # base_velocity_reward = -w_i * np.linalg.norm(v_base - self.data.qvel[0:3])
+        # joint_torque_regularization = -w_i * np.linalg.norm(tau)
+        #
+        # joint_velocity_regularization = -w_i * np.linalg.norm(q_i)
+        #
+        # body_ground_contact_reward = -w_i * body_ground_contact
+        #
+        # upper_torso_pose_reward = -w_i * np.linalg.norm(torso_pose - self.data.qpos[3:6])
+        # head_height_reward = -w_i * np.linalg.norm(head_height - self.data.qpos[2])
+
+        left_foot_placement_reward = -w_i * np.linalg.norm(
+            self.data.site_xpos[self.model.site('left_foot_site').id] - self.data.qpos[0:3])
+        right_foot_placement_reward = -w_i * np.linalg.norm(
+            self.data.site_xpos[self.model.site('right_foot_site').id] - self.data.qpos[0:3])
+
+        base_pose_reward = weights[0] * np.sum(self.reward_func(self.data.qpos[0:3], phi_base, normalization[0]))
+        base_height_reward = weights[1] * np.sum(self.reward_func(self.data.qpos[2], h_base, normalization[1]))
+        base_velocity_reward = weights[2] * np.sum(self.reward_func(self.data.qvel[0:3], v_base, normalization[2]))
+        joint_torque_regularization = weights[3] * np.sum(self.reward_func(tau, tau_hat, normalization[3]))
+        joint_velocity_regularization = weights[4] * np.sum(self.reward_func(q_i, q_dot_hat, normalization[4]))
+        body_ground_contact_reward = weights[5] * body_ground_contact
+        upper_torso_pose_reward = weights[6] * np.sum(
+            self.reward_func(self.data.qpos[3:6], torso_pose, normalization[6]))
+        head_height_reward = weights[7] * np.sum(self.reward_func(self.data.qpos[2], head_height, normalization[7]))
+
+        # Sum of all rewards
+        reward = (0.2 * base_pose_reward + 0.2 * base_height_reward + 0.2 * base_velocity_reward +
+                  0.05 * joint_torque_regularization + 0.05 * joint_velocity_regularization +
+                  0.2 * body_ground_contact_reward + 0.05 * upper_torso_pose_reward + 0.2 -
+                  0.2 * head_height_reward + 0.001 * left_foot_placement_reward +
+                  0.001 * right_foot_placement_reward)
+        return reward,[]
     def debug_contacts(self,left_foot_contact,right_foot_contact):
         print("Left foot contact: ", self.model.body("LeftFoot").id)
         print("Right foot contact: ", self.model.body("RightFoot").id)
@@ -360,7 +413,11 @@ class HumanoidEnv(MujocoEnv):
         for i in range(num_links):
             mass = self.model.body_mass[i]
             pos = self.data.xpos[i]
-            acc = (self.data.cacc[i] + self.model.opt.gravity[2])  # acceleration including gravity
+
+            #TODO: Which one is correct acc.. do we need to add gravity or subtract or do nothing?
+
+            # acc = (self.data.cacc[i] + self.model.opt.gravity)  # acceleration including gravity
+            acc = (self.data.cacc[i])
 
             zmp_numerator_x += mass * (pos[0] * acc[2] - pos[2] * acc[0])
             zmp_numerator_y += mass * (pos[1] * acc[2] - pos[2] * acc[1])
@@ -371,31 +428,25 @@ class HumanoidEnv(MujocoEnv):
         return zmp_x, zmp_y
 
     def reset_model(self):
-        noise_low = -self._reset_noise_scale
-        noise_high = self._reset_noise_scale
+
         self.terminated=False
         self.steps=0
-        # super().reset()
-        qpos = self.init_qpos + self.np_random.uniform(
-            low=noise_low, high=noise_high, size=self.model.nq
-        )
-        qpos_squat = [
-            0.00326883, 0, 0.215544,
-            0.999472, 0, 0.0324943, 0,
-            0.00142608, 0.0219053, - 1.31238, 2.34488, - 1.09752, - 0.0219516,
-            - 0.00142608, - 0.0219053, - 1.31742, 2.35333, - 1.10093, 0.0219516,
-            0, 0,
-            - 0.63612, - 0.04712, - 0.37696, - 1.67276,
-            - 0.7068, - 0.04712, 0.98952, - 1.46072  # Right leg (hip, knee, ankle)
-        ]
+
+        noise_low = -self._reset_noise_scale
+        noise_high = self._reset_noise_scale
+
+        # qpos = self.init_qpos + self.np_random.uniform(
+        #     low=noise_low, high=noise_high, size=self.model.nq
+        # )
+        qpos_squat = self.model.key_qpos[0].copy()
         qpos_squat = np.array(qpos_squat)
         qvel = self.init_qvel + self.np_random.uniform(
             low=noise_low, high=noise_high, size=self.model.nv
         )
-        self.set_state(qpos_squat, qvel)
         # self.data.reset()
+        self.set_state(qpos_squat, qvel)
         # self.model.step()  # Update physics calculations
-        # self.do_simulation(np.zeros(22),5)
+        # self.do_simulation(np.zeros(22),0)
         self._reset_episode_storage()
         observation = np.concatenate([qpos_squat, qvel])
         # left_foot_initial_z = self.data.body("LeftFoot").xpos[2]  # xpos[2] represents the Z-coordinate
@@ -414,7 +465,8 @@ class HumanoidEnv(MujocoEnv):
         }
 
     def get_observations(self):
-        observations = np.concatenate((self.qpos_storage[-1],self.qvel_storage[-1])) # This calls get_obs() which returns the concatenated result
+        observations = np.concatenate((self.qpos_storage[-1],self.qvel_storage[-1]))
+        # self.qpos_storage[-2],self.qvel_storage[-2]# This calls get_obs() which returns the concatenated result
         print("Returned Observations:", observations)  # Print returned value for debugging
         return observations
     def start_recording(self):

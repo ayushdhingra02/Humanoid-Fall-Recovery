@@ -58,6 +58,7 @@ class ActorCritic(nn.Module):
         for l in range(len(AC_Args.actor_hidden_dims)):
             if l == len(AC_Args.actor_hidden_dims) - 1:
                 actor_layers.append(nn.Linear(AC_Args.actor_hidden_dims[l], num_actions))
+                actor_layers.append(nn.Softsign())
             else:
                 actor_layers.append(nn.Linear(AC_Args.actor_hidden_dims[l], AC_Args.actor_hidden_dims[l + 1]))
                 actor_layers.append(activation)
