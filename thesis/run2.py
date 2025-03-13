@@ -44,7 +44,7 @@ from gymnasium.wrappers import TimeLimit, OrderEnforcing, PassiveEnvChecker
 ############################################------------testing---------------################
 
 
-env = HumanoidEnv()
+env = HumanoidEnv(render_mode='human')
 env = TimeLimit(env, max_episode_steps=1000)
 env = OrderEnforcing(env)
 env.reset()
