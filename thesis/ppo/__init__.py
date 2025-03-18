@@ -96,9 +96,12 @@ class Runner:
 
         num_train_envs = self.env.num_train_envs
         obs_dict = self.env.get_observations()
-        obs = torch.tensor(obs_dict, device=self.device, dtype=torch.float32).unsqueeze(0)
-        privileged_obs = obs
-        obs_history = obs
+        obs=obs_dict["obs"]
+        obs = torch.tensor(obs, device=self.device, dtype=torch.float32).unsqueeze(0)
+        privileged_obs = obs_dict["privileged_obs"]
+        privileged_obs = torch.tensor(privileged_obs, device=self.device, dtype=torch.float32).unsqueeze(0)
+        obs_history = obs_dict["obs_history"]
+        obs_history = torch.tensor(obs_history, device=self.device, dtype=torch.float32).unsqueeze(0)
 
         self.alg.actor_critic.train()
 
@@ -120,9 +123,12 @@ class Runner:
                     ret = self.env.step(actions_train[0])
                     obs_dict, rewards, done, truncation, infos = ret
 
-                    obs = torch.tensor(obs_dict, dtype=torch.float32).to(self.device).unsqueeze(0)
-                    privileged_obs = obs
-                    obs_history = obs
+                    obs = obs_dict["obs"]
+                    obs = torch.tensor(obs, device=self.device, dtype=torch.float32).unsqueeze(0)
+                    privileged_obs = obs_dict["privileged_obs"]
+                    privileged_obs = torch.tensor(privileged_obs, device=self.device, dtype=torch.float32).unsqueeze(0)
+                    obs_history = obs_dict["obs_history"]
+                    obs_history = torch.tensor(obs_history, device=self.device, dtype=torch.float32).unsqueeze(0)
                     if done or truncation:
                         rewards-=10
                         flag=1

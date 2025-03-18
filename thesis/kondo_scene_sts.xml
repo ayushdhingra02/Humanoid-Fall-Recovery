@@ -2,7 +2,7 @@
     <include file="kondo_5.xml"/>
 
     <worldbody>
-        <geom name="floor" pos = "0 0 0" size="0 0 .05" type="plane" material="grid" condim="3"/>
+        <geom name="floor" pos = "0 0 0" size="5 5 .1 " type="plane" material="grid" condim="3" contype="1" conaffinity="1"/>
         <geom name="chair" pos="-0.12 0 0.09" size="0.1 0.1 0.03" type="box" rgba="0 0.5 0.5 1" condim="3"/>
     </worldbody>
 

@@ -137,11 +137,9 @@ class HumanoidEnv(MujocoEnv):
         # Replace with your logic for returning the observation
         return self._get_obs()
     def _get_obs(self):
-        #TODO: previlegde obs ko include krna h
         #TODO: true com pos and vel
         #TODO: gravity vector
         #TODO: ground contact force
-        # TODO:friction coeff and coeeficient of restitution
         ## Default friction: friction="1.0 0.005 0.0001"
         ## Default elasticity: elasticity="0.0" (no bounce)
         delta_t = self.dt* self.decimations
@@ -438,7 +436,7 @@ class HumanoidEnv(MujocoEnv):
         # qpos = self.init_qpos + self.np_random.uniform(
         #     low=noise_low, high=noise_high, size=self.model.nq
         # )
-        qpos_squat = self.model.key_qpos[0].copy()
+        qpos_squat = self.model.key_qpos[1].copy()
         qpos_squat = np.array(qpos_squat)
         qvel = self.init_qvel + self.np_random.uniform(
             low=noise_low, high=noise_high, size=self.model.nv

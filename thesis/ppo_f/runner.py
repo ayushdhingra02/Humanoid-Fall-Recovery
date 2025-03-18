@@ -30,7 +30,8 @@ class Runner:
         self.device = device
         self.env = env
         self.empirical_normalization= False
-        obs, extras = self.env.get_obs()
+        # obs, extras = self.env.get_obs()
+        obs= self.env.get_obs()
         num_obs = obs.shape[0]
         # if "critic" in extras["observations"]:
         #     num_critic_obs = extras["observations"]["critic"].shape[1]

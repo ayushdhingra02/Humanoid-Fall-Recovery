@@ -1,4 +1,4 @@
-from env import HumanoidEnv
+from kondo_env import HumanoidEnv
 import numpy as np
 from gymnasium.wrappers import TimeLimit, OrderEnforcing, PassiveEnvChecker
 

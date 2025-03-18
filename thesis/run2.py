@@ -1,4 +1,4 @@
-from env import HumanoidEnv
+from kondo_env import HumanoidEnv
 import numpy as np
 from gymnasium.wrappers import TimeLimit, OrderEnforcing, PassiveEnvChecker
 
@@ -48,7 +48,35 @@ env = HumanoidEnv(render_mode='human')
 env = TimeLimit(env, max_episode_steps=1000)
 env = OrderEnforcing(env)
 env.reset()
+env.step(np.zeros(22))
 i=0
+model = env.unwrapped.model
+data = env.unwrapped.data
+
+# # Find the head body ID
+# head_name = "Head"  # Replace with actual head body name in your XML
+# head_body_id = model.body(name=head_name).id
+#
+# # Get the absolute position of the head (center of mass)
+# head_xipos = data.xipos[head_body_id]
+#
+# print("Head xpos:", head_xipos)
+#
+# foot_names = ["RightFoot", "LeftFoot"]  # Update with exact names from your XML
+# print("Number of contacts:", data.ncon)  # Should be > 0 if contact is detected
+#
+# for i in range(data.ncon):  # Loop through active contacts
+#     contact = data.contact[i]
+#
+#     geom1_id = contact.geom1
+#     geom2_id = contact.geom2
+#
+#     body1_id = model.geom_bodyid[geom1_id]
+#     body2_id = model.geom_bodyid[geom2_id]
+#
+#     body1_name = model.body(body1_id).name
+#     body2_name = model.body(body2_id).name
+#     print(f"Contact {i}: Position {contact.pos}")  # Print contact position
 while True:
 #     env.render()
     env.step(np.random.rand(22))
@@ -56,8 +84,20 @@ while True:
     print(i)
     if i==100:
         env.reset()
-        obs,rew,done,trunc,info=env.step(np.random.rand(22))
-        print(obs)
+        # print(obs)
+        head_name = "Head"
+        # Get MuJoCo model and data
+        model = env.unwrapped.model
+        data = env.unwrapped.data
+
+        # Find the head body ID
+        head_name = "Head"  # Replace with actual head body name in your XML
+        head_body_id = model.body(name=head_name).id
+
+        # Get the absolute position of the head (center of mass)
+        head_xipos = data.xipos[head_body_id]
+
+        print("Head xpos:", head_xipos)
         print(i)
         while True:
             i+=1
@@ -67,9 +107,9 @@ while True:
 
 
 
-while True:
-    i-=1
-    print (i)
+# while True:
+#     i-=1
+#     print (i)
     # env.step(np.zeros(22))
     # env.step(np.zeros(22))
 # qpos_squat = [
