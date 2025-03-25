@@ -81,7 +81,7 @@ class HumanoidEnv(MujocoEnv):
 
         self.decimations = 8
 
-        self._reset_noise_scale = 0
+        self._reset_noise_scale = 0.01
 
         self.default_pos = self.model.key_qpos[1].copy()
 
@@ -383,7 +383,9 @@ class HumanoidEnv(MujocoEnv):
         #     low=noise_low, high=noise_high, size=self.model.nq
         # )
         qpos_squat = self.model.key_qpos[0].copy()
-        qpos_squat = np.array(qpos_squat)
+        qpos_squat = np.array(qpos_squat) + self.np_random.uniform(
+            low=noise_low, high=noise_high, size=self.model.nq
+        )
         qvel = self.init_qvel + self.np_random.uniform(
             low=noise_low, high=noise_high, size=self.model.nv
         )
